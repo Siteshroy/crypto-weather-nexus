@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  swcMinify: true,
   async redirects() {
     return [
       {
@@ -17,6 +18,10 @@ const nextConfig = {
       },
     ];
   },
+  // Add Vercel-specific configurations
+  output: 'standalone',
+  poweredByHeader: false,
+  generateEtags: false,
 };
 
 module.exports = nextConfig; 
