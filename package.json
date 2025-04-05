@@ -34,5 +34,8 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcryptjs": "^2.4.6"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
