@@ -29,6 +29,7 @@ const CryptoSection: React.FC<CryptoSectionProps> = ({ isDarkMode }) => {
   const [displayedCoins, setDisplayedCoins] = useState<string[]>(BASE_COINS);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchCryptoData(displayedCoins));
@@ -45,24 +46,43 @@ const CryptoSection: React.FC<CryptoSectionProps> = ({ isDarkMode }) => {
       if (searchQuery.length < 2) {
         setSearchResults([]);
         setShowDropdown(false);
+        setSearchError(null);
         return;
       }
 
       setIsSearching(true);
+      setSearchError(null);
+      
       try {
+        const apiKey = process.env.NEXT_PUBLIC_COINGECKO_API_KEY;
+        if (!apiKey) {
+          throw new Error('API key is not configured');
+        }
+
         const response = await fetch(
-          `https://api.coingecko.com/api/v3/search?query=${searchQuery}`,
+          `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(searchQuery)}`,
           {
             headers: {
-              'x-cg-demo-api-key': process.env.NEXT_PUBLIC_COINGECKO_API_KEY as string
+              'x-cg-demo-api-key': apiKey
             }
           }
         );
+
+        if (!response.ok) {
+          throw new Error(
+            response.status === 429 
+              ? 'Rate limit exceeded. Please try again later.' 
+              : 'Failed to fetch search results'
+          );
+        }
+
         const data = await response.json();
         setSearchResults(data.coins.slice(0, 10)); // Limit to top 10 results
         setShowDropdown(true);
       } catch (error) {
         console.error('Error searching coins:', error);
+        setSearchError(error instanceof Error ? error.message : 'Failed to search coins');
+        setSearchResults([]);
       } finally {
         setIsSearching(false);
       }
@@ -72,9 +92,25 @@ const CryptoSection: React.FC<CryptoSectionProps> = ({ isDarkMode }) => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
+  // Add click outside listener to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.search-container')) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   const handleCoinSelect = (coinId: string) => {
     if (!displayedCoins.includes(coinId)) {
+      const updatedCoins = [...displayedCoins, coinId];
+      setDisplayedCoins(updatedCoins);
       dispatch(addToDisplay(coinId));
+      dispatch(fetchCryptoData([coinId])); // Fetch data for the new coin immediately
     }
     setSearchQuery('');
     setShowDropdown(false);
@@ -112,25 +148,44 @@ const CryptoSection: React.FC<CryptoSectionProps> = ({ isDarkMode }) => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           Cryptocurrency
         </h2>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search cryptocurrencies..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500
+        <div className="w-full max-w-md relative">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Search cryptocurrencies..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500
               ${isDarkMode 
                 ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' 
                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
               }`}
-          />
+            />
+            <div className={`absolute right-2 p-1 ${isDarkMode ? 'text-gray-100' : 'text-gray-600'}`}>
+              {isSearching ? (
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                ) : (
+                <svg className="h-5 w-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+            </div>
+          </div>
+          
           {/* Search Results Dropdown */}
           {showDropdown && searchResults.length > 0 && (
-            <div className={`absolute z-10 w-full mt-1 rounded-lg shadow-lg overflow-hidden
+            <div className={`absolute z-50 w-full mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto
               ${isDarkMode 
                 ? 'bg-gray-700 border border-gray-600' 
                 : 'bg-white border border-gray-200'
@@ -155,11 +210,32 @@ const CryptoSection: React.FC<CryptoSectionProps> = ({ isDarkMode }) => {
               ))}
             </div>
           )}
+
+          {isSearching && (
+            <div className={`absolute right-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+          )}
+          
+          {searchError && (
+            <div className={`absolute top-full mt-1 w-full p-2 rounded-lg text-sm text-red-500 
+              ${isDarkMode ? 'bg-gray-700' : 'bg-white'} border border-red-500`}>
+              {searchError}
+            </div>
+          )}
+          {showDropdown && !isSearching && searchResults.length === 0 && (
+            <div className={`absolute z-50 w-full mt-1 ${isDarkMode ? ' text-gray-100 bg-gray-700 border-gray-600' : 'text-gray-600 bg-white border-gray-300'} rounded-lg shadow-lg p-4 text-center`}>
+              No coins found
+            </div>
+          )}
         </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {displayedCoins.map((coinId) => {
+        {sortedCoins.map((coinId) => {
           const coinData = data[coinId];
           if (!coinData) return null;
 

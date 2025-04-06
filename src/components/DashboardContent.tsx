@@ -126,7 +126,7 @@ export default function DashboardContent() {
         </div>
 
         {/* Mobile menu */}
-        <div className={`md:hidden ${isMobileMenuOpen ? 'block' : 'hidden'}`}>
+        <div className={`md:hidden ${isMobileMenuOpen ? 'absolute bg-inherit w-full' : 'hidden'}`}>
           <div className="px-2 pt-2 pb-3 space-y-1">
             <Link
               href="/favorites"
@@ -140,6 +140,12 @@ export default function DashboardContent() {
             >
               Notifications {unreadCount > 0 && `(${unreadCount})`}
             </Link>
+            <button
+              onClick={handleLogout}
+              className={`block w-full text-left px-4 py-2 text-sm ${isDarkMode ? 'text-red-600 hover:bg-gray-600' : 'text-red-600 hover:bg-red-50'}`}
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </nav>
